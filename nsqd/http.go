@@ -60,7 +60,7 @@ func newHTTPServer(ctx *context, tlsEnabled bool, tlsRequired bool) *httpServer 
 	router.Handle("POST", "/pub", http_api.Decorate(s.doPUB, http_api.V1))
 	router.Handle("POST", "/mpub", http_api.Decorate(s.doMPUB, http_api.V1))
 	router.Handle("GET", "/stats", http_api.Decorate(s.doStats, log, http_api.V1))
-
+	router.Handle("GET", "/stack", http_api.Decorate(s.doPrintStack, log, http_api.V1))
 	// only v1
 	router.Handle("POST", "/topic/create", http_api.Decorate(s.doCreateTopic, log, http_api.V1))
 	router.Handle("POST", "/topic/delete", http_api.Decorate(s.doDeleteTopic, log, http_api.V1))
@@ -70,6 +70,7 @@ func newHTTPServer(ctx *context, tlsEnabled bool, tlsRequired bool) *httpServer 
 	router.Handle("POST", "/channel/create", http_api.Decorate(s.doCreateChannel, log, http_api.V1))
 	router.Handle("POST", "/channel/delete", http_api.Decorate(s.doDeleteChannel, log, http_api.V1))
 	router.Handle("POST", "/channel/empty", http_api.Decorate(s.doEmptyChannel, log, http_api.V1))
+	router.Handle("POST", "/channel/drain", http_api.Decorate(s.doDrainChannel, log, http_api.V1))
 	router.Handle("POST", "/channel/pause", http_api.Decorate(s.doPauseChannel, log, http_api.V1))
 	router.Handle("POST", "/channel/unpause", http_api.Decorate(s.doPauseChannel, log, http_api.V1))
 	router.Handle("GET", "/config/:opt", http_api.Decorate(s.doConfig, log, http_api.V1))
@@ -423,6 +424,30 @@ func (s *httpServer) doEmptyChannel(w http.ResponseWriter, req *http.Request, ps
 	if err != nil {
 		return nil, http_api.Err{500, "INTERNAL_ERROR"}
 	}
+
+	return nil, nil
+}
+
+func (s *httpServer) doDrainChannel(w http.ResponseWriter, req *http.Request, ps httprouter.Params) (interface{}, error) {
+	_, topic, channelName, err := s.getExistingTopicFromQuery(req)
+	if err != nil {
+		return nil, err
+	}
+
+	channel, err := topic.GetExistingChannel(channelName)
+	if err != nil {
+		return nil, http_api.Err{404, "CHANNEL_NOT_FOUND"}
+	}
+
+	err = channel.Drain()
+	if err != nil {
+		return nil, http_api.Err{500, "INTERNAL_ERROR"}
+	}
+
+	return nil, nil
+}
+func (s *httpServer) doPrintStack(w http.ResponseWriter, req *http.Request, ps httprouter.Params) (interface{}, error) {
+	s.ctx.nsqd.PrintStack()
 
 	return nil, nil
 }

@@ -11,10 +11,13 @@ import (
 	"math/rand"
 	"net"
 	"os"
+	"os/signal"
 	"path"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/nsqio/nsq/internal/clusterinfo"
@@ -279,6 +282,7 @@ func (n *NSQD) Main() error {
 	if n.getOpts().StatsdAddress != "" {
 		n.waitGroup.Wrap(n.statsdLoop)
 	}
+	n.waitGroup.Wrap(n.signalLoop)
 
 	err := <-exitCh
 	return err
@@ -753,4 +757,19 @@ func buildTLSConfig(opts *Options) (*tls.Config, error) {
 
 func (n *NSQD) IsAuthEnabled() bool {
 	return len(n.getOpts().AuthHTTPAddresses) != 0
+}
+
+func (n *NSQD) signalLoop() {
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGQUIT)
+
+	for {
+		<-sigs
+		n.PrintStack()
+	}
+}
+func (n *NSQD) PrintStack() {
+	buf := make([]byte, 1<<20)
+	stacklen := runtime.Stack(buf, true)
+	log.Printf("=== received SIGQUIT ===\n*** goroutine dump...\n%s\n*** end\n", buf[:stacklen])
 }

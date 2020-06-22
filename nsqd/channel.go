@@ -109,8 +109,8 @@ func NewChannel(topicName string, channelName string, ctx *context,
 			backendName,
 			ctx.nsqd.getOpts().DataPath,
 			ctx.nsqd.getOpts().MaxBytesPerFile,
-			int32(minValidMsgLength),
-			int32(ctx.nsqd.getOpts().MaxMsgSize)+minValidMsgLength,
+			int32(minV1ValidMsgLength),
+			int32(ctx.nsqd.getOpts().MaxMsgSize)+minV1ValidMsgLength,
 			ctx.nsqd.getOpts().SyncEvery,
 			ctx.nsqd.getOpts().SyncTimeout,
 			dqLogf,
@@ -195,7 +195,6 @@ func (c *Channel) Empty() error {
 	for _, client := range c.clients {
 		client.Empty()
 	}
-
 	for {
 		select {
 		case <-c.memoryMsgChan:
@@ -205,6 +204,53 @@ func (c *Channel) Empty() error {
 	}
 
 finish:
+	return c.backend.Empty()
+}
+
+//Drain requeue msgs
+func (c *Channel) Drain() error {
+	c.ctx.nsqd.logf(LOG_INFO, "drain channel %s", c.name)
+	c.Lock()
+	defer c.Unlock()
+	var drained uint64
+	c.initPQ()
+	for _, client := range c.clients {
+		client.Empty()
+	}
+	topic, err := c.ctx.nsqd.GetExistingTopic(c.topicName)
+	if err != nil {
+		return err
+	}
+	for {
+		select {
+		case m := <-c.memoryMsgChan:
+			topic.RequeueMessage(m)
+			atomic.AddUint64(&drained, 1)
+		default:
+			goto drainBackend
+		}
+	}
+drainBackend:
+	ticker := time.NewTimer(5 * time.Second)
+
+	for {
+		select {
+		case buf := <-c.backend.ReadChan():
+			ticker.Stop()
+			ticker.Reset(5 * time.Second)
+			m, err := decodeMessage(buf)
+			if err != nil {
+				c.ctx.nsqd.logf(LOG_ERROR, "failed to decode message - %s", err)
+				continue
+			}
+			atomic.AddUint64(&drained, 1)
+			topic.RequeueMessage(m)
+		case <-ticker.C:
+			goto finish
+		}
+	}
+finish:
+	c.ctx.nsqd.logf(LOG_INFO, "drain channel %s, drain %v msgs", c.name, drained)
 	return c.backend.Empty()
 }
 
@@ -395,29 +441,46 @@ func (c *Channel) RequeueMessage(clientID int64, id MessageID, timeout time.Dura
 // AddClient adds a client to the Channel's client list
 func (c *Channel) AddClient(clientID int64, client Consumer) error {
 	c.Lock()
-	defer c.Unlock()
 
 	_, ok := c.clients[clientID]
 	if ok {
+		c.Unlock()
 		return nil
 	}
 
 	maxChannelConsumers := c.ctx.nsqd.getOpts().MaxChannelConsumers
 	if maxChannelConsumers != 0 && len(c.clients) >= maxChannelConsumers {
+		c.Unlock()
 		return errors.New("E_TOO_MANY_CHANNEL_CONSUMERS")
 	}
 
 	c.clients[clientID] = client
-	return nil
+	c.Unlock()
+
+	topic, err := c.ctx.nsqd.GetExistingTopic(c.topicName)
+	if err == nil {
+		topic.NotifyChannelUpdate() ///
+	} else {
+		c.ctx.nsqd.logf(LOG_ERROR, "AddClient topic not found %s", c.topicName)
+	}
+	return err
+}
+
+//IsActive if have active client pulling msgs
+func (c *Channel) IsActive() bool {
+	c.RLock()
+	defer c.RUnlock()
+	cCount := len(c.clients)
+	return cCount > 0
 }
 
 // RemoveClient removes a client from the Channel's client list
 func (c *Channel) RemoveClient(clientID int64) {
 	c.Lock()
-	defer c.Unlock()
 
 	_, ok := c.clients[clientID]
 	if !ok {
+		c.Unlock()
 		return
 	}
 	delete(c.clients, clientID)
@@ -425,6 +488,14 @@ func (c *Channel) RemoveClient(clientID int64) {
 	if len(c.clients) == 0 && c.ephemeral == true {
 		go c.deleter.Do(func() { c.deleteCallback(c) })
 	}
+	c.Unlock()
+	topic, err := c.ctx.nsqd.GetExistingTopic(c.topicName)
+	if err == nil {
+		topic.NotifyChannelUpdate()
+	} else {
+		c.ctx.nsqd.logf(LOG_ERROR, "RemoveClient topic not found %s", c.topicName)
+	}
+
 }
 
 func (c *Channel) StartInFlightTimeout(msg *Message, clientID int64, timeout time.Duration) error {

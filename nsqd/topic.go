@@ -73,8 +73,8 @@ func NewTopic(topicName string, ctx *context, deleteCallback func(*Topic)) *Topi
 			topicName,
 			ctx.nsqd.getOpts().DataPath,
 			ctx.nsqd.getOpts().MaxBytesPerFile,
-			int32(minValidMsgLength),
-			int32(ctx.nsqd.getOpts().MaxMsgSize)+minValidMsgLength,
+			int32(minV1ValidMsgLength),
+			int32(ctx.nsqd.getOpts().MaxMsgSize)+minV1ValidMsgLength,
 			ctx.nsqd.getOpts().SyncEvery,
 			ctx.nsqd.getOpts().SyncTimeout,
 			dqLogf,
@@ -109,11 +109,7 @@ func (t *Topic) GetChannel(channelName string) *Channel {
 	t.Unlock()
 
 	if isNew {
-		// update messagePump state
-		select {
-		case t.channelUpdateChan <- 1:
-		case <-t.exitChan:
-		}
+		t.NotifyChannelUpdate()
 	}
 
 	return channel
@@ -163,17 +159,21 @@ func (t *Topic) DeleteExistingChannel(channelName string) error {
 	// (so that we dont leave any messages around)
 	channel.Delete()
 
-	// update messagePump state
-	select {
-	case t.channelUpdateChan <- 1:
-	case <-t.exitChan:
-	}
-
+	t.NotifyChannelUpdate()
 	if numChannels == 0 && t.ephemeral == true {
 		go t.deleter.Do(func() { t.deleteCallback(t) })
 	}
 
 	return nil
+}
+
+//NotifyChannelUpdate notify channel client add/remove/
+func (t *Topic) NotifyChannelUpdate() {
+	// update messagePump state
+	select {
+	case t.channelUpdateChan <- 1:
+	case <-t.exitChan:
+	}
 }
 
 // PutMessage writes a Message to the queue
@@ -189,6 +189,20 @@ func (t *Topic) PutMessage(m *Message) error {
 	}
 	atomic.AddUint64(&t.messageCount, 1)
 	atomic.AddUint64(&t.messageBytes, uint64(len(m.Body)))
+	return nil
+}
+
+// PutMessage writes a Message to the queue
+func (t *Topic) RequeueMessage(m *Message) error {
+	t.RLock()
+	defer t.RUnlock()
+	if atomic.LoadInt32(&t.exitFlag) == 1 {
+		return errors.New("exiting")
+	}
+	err := t.put(m)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -264,7 +278,9 @@ func (t *Topic) messagePump() {
 	}
 	t.RLock()
 	for _, c := range t.channelMap {
-		chans = append(chans, c)
+		if c.IsActive() {
+			chans = append(chans, c)
+		}
 	}
 	t.RUnlock()
 	if len(chans) > 0 && !t.IsPaused() {
@@ -286,7 +302,9 @@ func (t *Topic) messagePump() {
 			chans = chans[:0]
 			t.RLock()
 			for _, c := range t.channelMap {
-				chans = append(chans, c)
+				if c.IsActive() {
+					chans = append(chans, c)
+				}
 			}
 			t.RUnlock()
 			if len(chans) == 0 || t.IsPaused() {
@@ -309,7 +327,7 @@ func (t *Topic) messagePump() {
 		case <-t.exitChan:
 			goto exit
 		}
-		slotNo := msg.routingHash % uint32(len(chans))
+		slotNo := msg.RoutingHash % uint32(len(chans))
 		channel := chans[slotNo]
 		//for i, channel := range chans
 		{

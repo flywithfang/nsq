@@ -123,10 +123,10 @@ func (p *protocolV2) IOLoop(conn net.Conn) error {
 }
 
 func (p *protocolV2) SendMessage(client *clientV2, msg *Message) error {
-	p.ctx.nsqd.logf(LOG_DEBUG, "PROTOCOL(V2): writing msg(%s) to client(%s) - %s", msg.ID, client, msg.Body)
+	p.ctx.nsqd.logf(LOG_DEBUG, "PROTOCOL(V2): writing msg(%s) to client(%s) - %s", string(msg.ID[:]), client, msg.Body)
 	var buf = &bytes.Buffer{}
 
-	_, err := msg.WriteTo(buf)
+	_, err := msg.WriteToV1(buf)
 	if err != nil {
 		return err
 	}
@@ -343,6 +343,7 @@ exit:
 	if err != nil {
 		p.ctx.nsqd.logf(LOG_ERROR, "PROTOCOL(V2): [%s] messagePump error - %s", client, err)
 	}
+	p.ctx.nsqd.logf(LOG_INFO, "PROTOCOL(V2): [%s] exited messagePump", client)
 }
 
 func (p *protocolV2) IDENTIFY(client *clientV2, params [][]byte) ([]byte, error) {
