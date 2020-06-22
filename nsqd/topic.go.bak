@@ -309,20 +309,18 @@ func (t *Topic) messagePump() {
 		case <-t.exitChan:
 			goto exit
 		}
-		slotNo := msg.routingHash % uint32(len(chans))
-		channel := chans[slotNo]
-		//for i, channel := range chans
-		{
+
+		for i, channel := range chans {
 			chanMsg := msg
 			// copy the message because each channel
 			// needs a unique instance but...
 			// fastpath to avoid copy if its the first channel
 			// (the topic already created the first copy)
-			/*	if i > 0 {
+			if i > 0 {
 				chanMsg = NewMessage(msg.ID, msg.Body)
 				chanMsg.Timestamp = msg.Timestamp
 				chanMsg.deferred = msg.deferred
-			}*/
+			}
 			if chanMsg.deferred != 0 {
 				channel.PutMessageDeferred(chanMsg, chanMsg.deferred)
 				continue

@@ -24,12 +24,11 @@ func HashString(s string) uint32 {
 type MessageID [MsgIDLength]byte
 
 type Message struct {
-	ID          MessageID
-	Body        []byte
-	Timestamp   int64
-	Attempts    uint16
-	Version     uint8
-	routingHash uint32
+	ID        MessageID
+	Body      []byte
+	Timestamp int64
+	Attempts  uint16
+
 	// for in-flight handling
 	deliveryTS time.Time
 	clientID   int64
@@ -38,19 +37,11 @@ type Message struct {
 	deferred   time.Duration
 }
 
-func NewMessage(id MessageID, body []byte, routingKey string) *Message {
-	var hashCode uint32 = 0
-	if len(routingKey) == 0 {
-		hashCode = rand.Uint32()
-	} else {
-		hashCode = HashString(routingKey)
-	}
-	////log.Printf("new msg id %v, routing key %v, hash %d\n", string(id[:]), routingKey, hashCode)
+func NewMessage(id MessageID, body []byte) *Message {
 	return &Message{
-		ID:          id,
-		Body:        body,
-		Timestamp:   time.Now().UnixNano(),
-		routingHash: hashCode,
+		ID:        id,
+		Body:      body,
+		Timestamp: time.Now().UnixNano(),
 	}
 }
 

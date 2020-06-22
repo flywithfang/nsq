@@ -4,6 +4,8 @@ DESTDIR=
 BLDDIR = build
 BLDFLAGS=
 EXT=
+GOOS=windows
+ $(info GOOS ${GOOS} )
 ifeq (${GOOS},windows)
     EXT=.exe
 endif
@@ -23,7 +25,7 @@ $(BLDDIR)/to_nsq:      $(wildcard apps/to_nsq/*.go               internal/*/*.go
 
 $(BLDDIR)/%:
 	@mkdir -p $(dir $@)
-	go build ${BLDFLAGS} -o $@ ./apps/$*
+	go build ${BLDFLAGS} -o $@${EXT} ./apps/$*
 
 $(APPS): %: $(BLDDIR)/%
 
@@ -35,4 +37,4 @@ clean:
 
 install: $(APPS)
 	install -m 755 -d ${DESTDIR}${BINDIR}
-	for APP in $^ ; do install -m 755 ${BLDDIR}/$$APP ${DESTDIR}${BINDIR}/$$APP${EXT} ; done
+	for APP in $^ ; do install -m 755 ${BLDDIR}/$$APP ${DESTDIR}${BINDIR}/$$APP ; done

@@ -138,7 +138,7 @@ func readAndPublish(r *bufio.Reader, delim byte, producers map[string]*nsq.Produ
 	}
 
 	for _, producer := range producers {
-		err := producer.Publish(*topic, line)
+		err := producer.Publish(*topic, line, "")
 		if err != nil {
 			return err
 		}
