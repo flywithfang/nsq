@@ -116,6 +116,12 @@ func (p *protocolV2) IOLoop(conn net.Conn) error {
 	close(client.ExitChan)
 	if client.Channel != nil {
 		client.Channel.RemoveClient(client.ID)
+		topic, err := p.ctx.nsqd.GetExistingTopic(client.Channel.topicName)
+		if err == nil {
+			topic.NotifyChannelUpdate()
+		} else {
+			p.ctx.nsqd.logf(LOG_ERROR, "RemoveClient topic not found %s", client.Channel.topicName)
+		}
 	}
 
 	p.ctx.nsqd.RemoveClient(client.ID)
@@ -613,17 +619,22 @@ func (p *protocolV2) SUB(client *clientV2, params [][]byte) ([]byte, error) {
 	// last client can leave the channel between GetChannel() and AddClient().
 	// Avoid adding a client to an ephemeral channel / topic which has started exiting.
 	var channel *Channel
+	var err error
 	for {
 		topic := p.ctx.nsqd.GetTopic(topicName)
-		channel = topic.GetChannel(channelName)
-		if err := channel.AddClient(client.ID, client); err != nil {
+		channel, err = topic.AutoCreateChannel(channelName, client)
+		if err != nil {
+			return nil, protocol.NewFatalClientErr(nil, "invalid_channel_name", err.Error())
+		}
+		/*if err = channel.AddClient(client.ID, client); err != nil {
 			return nil, protocol.NewFatalClientErr(nil, "E_TOO_MANY_CHANNEL_CONSUMERS",
 				fmt.Sprintf("channel consumers for %s:%s exceeds limit of %d",
 					topicName, channelName, p.ctx.nsqd.getOpts().MaxChannelConsumers))
-		}
+		}*/
 
 		if (channel.ephemeral && channel.Exiting()) || (topic.ephemeral && topic.Exiting()) {
 			channel.RemoveClient(client.ID)
+			topic.NotifyChannelUpdate()
 			time.Sleep(1 * time.Millisecond)
 			continue
 		}

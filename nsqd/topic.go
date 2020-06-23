@@ -3,6 +3,7 @@ package nsqd
 import (
 	"bytes"
 	"errors"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -114,6 +115,37 @@ func (t *Topic) GetChannel(channelName string) *Channel {
 
 	return channel
 }
+func (t *Topic) AutoCreateChannel(channelName string, client *clientV2) (*Channel, error) {
+	t.Lock()
+	l := len(channelName)
+	tc := channelName[l-1]
+	var channel *Channel
+	var isNew bool
+	if tc < '0' || tc > '9' {
+		for k := 1; k < 256; k++ {
+			newName := channelName + "-" + strconv.Itoa(k)
+			channel, isNew = t.getOrCreateChannel(newName)
+			if isNew || !channel.IsActive() {
+				break
+			}
+		}
+	} else {
+		channel, isNew = t.getOrCreateChannel(channelName)
+	}
+	if !isNew && channel.IsActive() {
+		t.Unlock()
+		return nil, errors.New("channel exisit %s " + channelName)
+	}
+	if err := channel.AddClient(client.ID, client); err != nil {
+		t.Unlock()
+		return nil, errors.New("fail to add client")
+	}
+	t.Unlock()
+
+	t.NotifyChannelUpdate()
+
+	return channel, nil
+}
 
 // this expects the caller to handle locking
 func (t *Topic) getOrCreateChannel(channelName string) (*Channel, bool) {
@@ -158,6 +190,32 @@ func (t *Topic) DeleteExistingChannel(channelName string) error {
 	// delete empties the channel before closing
 	// (so that we dont leave any messages around)
 	channel.Delete()
+
+	t.NotifyChannelUpdate()
+	if numChannels == 0 && t.ephemeral == true {
+		go t.deleter.Do(func() { t.deleteCallback(t) })
+	}
+
+	return nil
+}
+func (t *Topic) DrainChannel(channelName string) error {
+
+	t.Lock()
+	channel, ok := t.channelMap[channelName]
+	if !ok {
+		t.Unlock()
+		return errors.New("channel does not exist")
+	}
+	delete(t.channelMap, channelName)
+	// not defered so that we can continue while the channel async closes
+	numChannels := len(t.channelMap)
+	t.Unlock()
+
+	t.ctx.nsqd.logf(LOG_INFO, "TOPIC(%s): deleting channel %s", t.name, channel.name)
+
+	// delete empties the channel before closing
+	// (so that we dont leave any messages around)
+	channel.Drain()
 
 	t.NotifyChannelUpdate()
 	if numChannels == 0 && t.ephemeral == true {

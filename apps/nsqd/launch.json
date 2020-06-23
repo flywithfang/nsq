@@ -12,7 +12,7 @@
             "mode": "auto",
             "program": "${fileDirname}",
             "env": {},
-            "args": [ "-mem-queue-size","0","-log-level","debug"],
+            "args": [ "-mem-queue-size","0"],
             "cwd":"C:/Users/winston/go/src/github.com/nsqio/nsq/build"
         }
     ]

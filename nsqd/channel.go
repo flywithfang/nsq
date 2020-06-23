@@ -214,8 +214,8 @@ func (c *Channel) Drain() error {
 	defer c.Unlock()
 	var drained uint64
 	c.initPQ()
-	for _, client := range c.clients {
-		client.Empty()
+	if len(c.clients) != 0 {
+		return errors.New("client count !=0")
 	}
 	topic, err := c.ctx.nsqd.GetExistingTopic(c.topicName)
 	if err != nil {
@@ -456,14 +456,7 @@ func (c *Channel) AddClient(clientID int64, client Consumer) error {
 
 	c.clients[clientID] = client
 	c.Unlock()
-
-	topic, err := c.ctx.nsqd.GetExistingTopic(c.topicName)
-	if err == nil {
-		topic.NotifyChannelUpdate() ///
-	} else {
-		c.ctx.nsqd.logf(LOG_ERROR, "AddClient topic not found %s", c.topicName)
-	}
-	return err
+	return nil
 }
 
 //IsActive if have active client pulling msgs
@@ -489,12 +482,6 @@ func (c *Channel) RemoveClient(clientID int64) {
 		go c.deleter.Do(func() { c.deleteCallback(c) })
 	}
 	c.Unlock()
-	topic, err := c.ctx.nsqd.GetExistingTopic(c.topicName)
-	if err == nil {
-		topic.NotifyChannelUpdate()
-	} else {
-		c.ctx.nsqd.logf(LOG_ERROR, "RemoveClient topic not found %s", c.topicName)
-	}
 
 }
 

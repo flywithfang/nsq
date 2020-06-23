@@ -434,14 +434,9 @@ func (s *httpServer) doDrainChannel(w http.ResponseWriter, req *http.Request, ps
 		return nil, err
 	}
 
-	channel, err := topic.GetExistingChannel(channelName)
+	err = topic.DrainChannel(channelName)
 	if err != nil {
-		return nil, http_api.Err{404, "CHANNEL_NOT_FOUND"}
-	}
-
-	err = channel.Drain()
-	if err != nil {
-		return nil, http_api.Err{500, "INTERNAL_ERROR"}
+		return nil, http_api.Err{500, err.Error()}
 	}
 
 	return nil, nil
