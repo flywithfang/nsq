@@ -2,6 +2,11 @@ nsq-routing is a fork of nsq 1.2.0
 
 features:
 - message with the same routing key will route to the same client 
+  ```golang
+   func (w *Producer) Publish(topic string, body []byte, routingKey string) error {
+	 return w.sendCommand(Publish(topic, body, routingKey))
+    }
+  ```
 - routing msg to channels, no "clone", more like kafka partition
 - drain channel data to topic before channel deletion
 	- /channel/drain?topic=xx&channel=yy
