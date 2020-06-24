@@ -206,6 +206,10 @@ func (t *Topic) DrainChannel(channelName string) error {
 		t.Unlock()
 		return errors.New("channel does not exist")
 	}
+	if channel.IsActive() {
+		t.Unlock()
+		return errors.New("client count !=0")
+	}
 	delete(t.channelMap, channelName)
 	// not defered so that we can continue while the channel async closes
 	numChannels := len(t.channelMap)
