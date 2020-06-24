@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 nsq-routing is a fork of nsq 1.2.0
 
 features:
@@ -8,17 +7,9 @@ features:
 - clients will have auto-allocated channel with names "default-1" "default-2"...
 - messages don't route to channel without active client
 - one channel one client
-- comaptaible with original nsq message format and data file
+<<<<<<< HEAD
+- compatible with original nsq message format and data file
 =======
-nsq-routing is a fork or nsq 1.2.0
-
-features:
-1 message with the same routing key will route to the same client 
-2 routing msg to channels, no "clone"
-3 drain channel data to topic before channel deletion
-4 clients will have auto-allocated channel with names "default-1" "default-2"...
-5 messages don't route to channel without active client
-6 one channel one client
-7 comaptaible with original nsq message format and data file
->>>>>>> e3e6c5e8f36b50ecc180f726f83c3e0ca2d3cf1b
+- comaptaible with original nsq message format and data file
+>>>>>>> 8fdf5ffbb1d4a5509cd5cb3b78497d9f171767a5
 
