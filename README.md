@@ -7,5 +7,5 @@ features:
 - clients will have auto-allocated channel with names "default-1" "default-2"...
 - messages don't route to channel without active client
 - one channel one client
-- comaptaible with original nsq message format and data file
+- compatible with original nsq message format and data file
 
