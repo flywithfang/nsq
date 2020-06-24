@@ -2,7 +2,7 @@ nsq-routing is a fork of nsq 1.2.0
 
 features:
 - message with the same routing key will route to the same client 
-- routing msg to channels, no "clone"
+- routing msg to channels, no "clone", more like kafkia partition
 - drain channel data to topic before channel deletion
 	- /channel/drain?topic=xx&channel=yy
 - clients will have auto-allocated channel with names "default-1" "default-2"...
