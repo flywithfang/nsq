@@ -764,9 +764,15 @@ func (n *NSQD) signalLoop() {
 	signal.Notify(sigs, syscall.SIGQUIT)
 
 	for {
-		<-sigs
-		n.PrintStack()
+		select {
+		case <-sigs:
+			n.PrintStack()
+		case <-n.exitChan:
+			goto exit
+		}
 	}
+exit:
+	n.logf(LOG_INFO, "signalLoop: exit")
 }
 func (n *NSQD) PrintStack() {
 	buf := make([]byte, 1<<20)
