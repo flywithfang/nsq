@@ -396,15 +396,22 @@ func (c *Channel) TouchMessage(clientID int64, id MessageID, clientMsgTimeout ti
 }
 
 // FinishMessage successfully discards an in-flight message
-func (c *Channel) FinishMessage(clientID int64, id MessageID) error {
+func (c *Channel) FinishMessage(clientID int64, id MessageID, result []byte) error {
 	msg, err := c.popInFlightMessage(clientID, id)
 	if err != nil {
 		return err
 	}
 	c.removeFromInFlightPQ(msg)
+	if msg.srcClientID > 0 && result != nil {
+		c := c.ctx.nsqd.GetClient(msg.srcClientID)
+		if c != nil {
+			c.FinishMessage(id, result)
+		}
+	}
 	if c.e2eProcessingLatencyStream != nil {
 		c.e2eProcessingLatencyStream.Insert(msg.Timestamp)
 	}
+
 	return nil
 }
 

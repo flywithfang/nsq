@@ -2,8 +2,10 @@ package nsqd
 
 import (
 	"bufio"
+	"bytes"
 	"compress/flate"
 	"crypto/tls"
+	"encoding/binary"
 	"fmt"
 	"net"
 	"sync"
@@ -106,9 +108,13 @@ type clientV2 struct {
 
 	AuthSecret string
 	AuthState  *auth.State
-}
 
-func newClientV2(id int64, conn net.Conn, ctx *context) *clientV2 {
+	wire *protocolV2
+}
+func newClientV2(id int64, conn net.Conn, ctx *context) *clientV2{
+	return newClientV2_2(id,conn,ctx,nil)
+}
+func newClientV2_2(id int64, conn net.Conn, ctx *context, wire *protocolV2) *clientV2 {
 	var identifier string
 	if conn != nil {
 		identifier, _, _ = net.SplitHostPort(conn.RemoteAddr().String())
@@ -145,6 +151,7 @@ func newClientV2(id int64, conn net.Conn, ctx *context) *clientV2 {
 		HeartbeatInterval: ctx.nsqd.getOpts().ClientTimeout / 2,
 
 		pubCounts: make(map[string]uint64),
+		wire:      wire,
 	}
 	c.lenSlice = c.lenBuf[:]
 	return c
@@ -607,4 +614,14 @@ func (c *clientV2) HasAuthorizations() bool {
 		return len(c.AuthState.Authorizations) != 0
 	}
 	return false
+}
+func (c *clientV2) FinishMessage(id MessageID, result []byte) error {
+	b := bytes.NewBuffer([]byte("RES "))
+	b.Write(id[:])
+	var buf [4]byte
+	len := len(result)
+	binary.BigEndian.PutUint32(buf[:], uint32(len))
+	b.Write(result)
+	c.wire.Send(c, frameTypeResponse, b.Bytes())
+	return nil
 }

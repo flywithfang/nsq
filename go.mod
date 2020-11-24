@@ -13,7 +13,7 @@ require (
 	github.com/mreiferson/go-options v1.0.0
 	github.com/nsqio/go-diskqueue v1.0.0
 	github.com/nsqio/go-nsq v1.0.8
-	golang.org/x/sys v0.0.0-20191224085550-c709ea063b76 // indirect
+	golang.org/x/tools v0.0.0-20201124005743-911501bfb504
 )
 
 go 1.13

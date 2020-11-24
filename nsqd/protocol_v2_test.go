@@ -466,7 +466,7 @@ func TestSizeLimits(t *testing.T) {
 	sub(t, conn, topicName, "ch")
 
 	// PUB that's valid
-	nsq.Publish(topicName, make([]byte, 95)).WriteTo(conn)
+	nsq.Publish(topicName, make([]byte, 95), "").WriteTo(conn)
 	resp, _ := nsq.ReadResponse(conn)
 	frameType, data, _ := nsq.UnpackResponse(resp)
 	t.Logf("frameType: %d, data: %s", frameType, data)
@@ -474,7 +474,7 @@ func TestSizeLimits(t *testing.T) {
 	test.Equal(t, []byte("OK"), data)
 
 	// PUB that's invalid (too big)
-	nsq.Publish(topicName, make([]byte, 105)).WriteTo(conn)
+	nsq.Publish(topicName, make([]byte, 105), "").WriteTo(conn)
 	resp, _ = nsq.ReadResponse(conn)
 	frameType, data, _ = nsq.UnpackResponse(resp)
 	t.Logf("frameType: %d, data: %s", frameType, data)
@@ -487,7 +487,7 @@ func TestSizeLimits(t *testing.T) {
 	defer conn.Close()
 
 	// PUB thats empty
-	nsq.Publish(topicName, []byte{}).WriteTo(conn)
+	nsq.Publish(topicName, []byte{}, "").WriteTo(conn)
 	resp, _ = nsq.ReadResponse(conn)
 	frameType, data, _ = nsq.UnpackResponse(resp)
 	t.Logf("frameType: %d, data: %s", frameType, data)

@@ -223,7 +223,7 @@ func (s *httpServer) doPUB(w http.ResponseWriter, req *http.Request, ps httprout
 		}
 	}
 
-	msg := NewMessage(topic.GenerateID(), body, "")
+	msg := NewMessage(topic.GenerateID(), body)
 	msg.deferred = deferred
 	err = topic.PutMessage(msg)
 	if err != nil {
@@ -298,7 +298,7 @@ func (s *httpServer) doMPUB(w http.ResponseWriter, req *http.Request, ps httprou
 				return nil, http_api.Err{413, "MSG_TOO_BIG"}
 			}
 
-			msg := NewMessage(topic.GenerateID(), block, "")
+			msg := NewMessage(topic.GenerateID(), block)
 			msgs = append(msgs, msg)
 		}
 	}

@@ -39,7 +39,7 @@ func (p *protocolV2) IOLoop(conn net.Conn) error {
 	var zeroTime time.Time
 
 	clientID := atomic.AddInt64(&p.ctx.nsqd.clientIDSequence, 1)
-	client := newClientV2(clientID, conn, p.ctx)
+	client := newClientV2_2(clientID, conn, p.ctx, p)
 	p.ctx.nsqd.AddClient(client.ID, client)
 
 	// synchronize the startup of messagePump in order
@@ -699,8 +699,35 @@ func (p *protocolV2) FIN(client *clientV2, params [][]byte) ([]byte, error) {
 	if err != nil {
 		return nil, protocol.NewFatalClientErr(nil, "E_INVALID", err.Error())
 	}
+	var res []byte = nil
+	if len(params) > 2 {
+		res = params[2]
+	}
+	var result []byte = nil
+	if res != nil && bytes.Equal(res, []byte("RES")) {
+		bodyLen, err := readLen(client.Reader, client.lenSlice)
+		if err != nil {
+			return nil, protocol.NewFatalClientErr(err, "E_BAD_MESSAGE", "FIN failed to read message body size")
+		}
 
-	err = client.Channel.FinishMessage(client.ID, *id)
+		if bodyLen <= 0 {
+			return nil, protocol.NewFatalClientErr(nil, "E_BAD_MESSAGE",
+				fmt.Sprintf("FIN invalid message body size %d", bodyLen))
+		}
+
+		if int64(bodyLen) > p.ctx.nsqd.getOpts().MaxMsgSize {
+			return nil, protocol.NewFatalClientErr(nil, "E_BAD_MESSAGE",
+				fmt.Sprintf("FIN message too big %d > %d", bodyLen, p.ctx.nsqd.getOpts().MaxMsgSize))
+		}
+
+		result = make([]byte, bodyLen)
+		_, err = io.ReadFull(client.Reader, result)
+		if err != nil {
+			return nil, protocol.NewFatalClientErr(err, "E_BAD_MESSAGE", "FIN failed to read message body")
+		}
+	}
+
+	err = client.Channel.FinishMessage(client.ID, *id, result)
 	if err != nil {
 		return nil, protocol.NewClientErr(err, "E_FIN_FAILED",
 			fmt.Sprintf("FIN %s failed %s", *id, err.Error()))
@@ -788,6 +815,10 @@ func (p *protocolV2) PUB(client *clientV2, params [][]byte) ([]byte, error) {
 	if len(params) > 2 {
 		routingKey = string(params[2])
 	}
+	rpc := false
+	if len(params) > 3 {
+		rpc = true
+	}
 	bodyLen, err := readLen(client.Reader, client.lenSlice)
 	if err != nil {
 		return nil, protocol.NewFatalClientErr(err, "E_BAD_MESSAGE", "PUB failed to read message body size")
@@ -814,15 +845,24 @@ func (p *protocolV2) PUB(client *clientV2, params [][]byte) ([]byte, error) {
 	}
 
 	topic := p.ctx.nsqd.GetTopic(topicName)
-	msg := NewMessage(topic.GenerateID(), messageBody, routingKey)
+	ID := topic.GenerateID()
+	var srcClientID int64 = 0
+	if rpc {
+		srcClientID = client.ID
+	}
+	msg := NewMessageV2(ID, messageBody, routingKey, srcClientID)
 	err = topic.PutMessage(msg)
 	if err != nil {
 		return nil, protocol.NewFatalClientErr(err, "E_PUB_FAILED", "PUB failed "+err.Error())
 	}
 
 	client.PublishedMessage(topicName, 1)
+	if rpc {
+		return okBytes, nil
+	} else {
+		return ID[:], nil
+	}
 
-	return okBytes, nil
 }
 
 func (p *protocolV2) MPUB(client *clientV2, params [][]byte) ([]byte, error) {
@@ -939,7 +979,7 @@ func (p *protocolV2) DPUB(client *clientV2, params [][]byte) ([]byte, error) {
 	}
 
 	topic := p.ctx.nsqd.GetTopic(topicName)
-	msg := NewMessage(topic.GenerateID(), messageBody, routingKey)
+	msg := NewMessageV2(topic.GenerateID(), messageBody, routingKey, 0)
 	msg.deferred = timeoutDuration
 	err = topic.PutMessage(msg)
 	if err != nil {
@@ -1015,7 +1055,7 @@ func readMPUB(r io.Reader, tmp []byte, topic *Topic, routingKey string, maxMessa
 			return nil, protocol.NewFatalClientErr(err, "E_BAD_MESSAGE", "MPUB failed to read message body")
 		}
 
-		messages = append(messages, NewMessage(topic.GenerateID(), msgBody, routingKey))
+		messages = append(messages, NewMessageV2(topic.GenerateID(), msgBody, routingKey, 0))
 	}
 
 	return messages, nil

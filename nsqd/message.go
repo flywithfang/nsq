@@ -17,7 +17,8 @@ const (
 	minV2ValidMsgLength = MsgIDLength + 8 + 2 + 1 + 4 // Timestamp + Attempts+ver+routinghash
 )
 const (
-	MSG_V2 uint8 = 128 //0x80
+	MSG_V2  uint8 = 0x80 //0x80
+	MSG_RPC uint8 = 0x01
 )
 
 func HashString(s string) uint32 {
@@ -35,7 +36,7 @@ type Message struct {
 	Body        []byte
 	Timestamp   int64
 	Attempts    uint16
-
+	srcClientID int64
 	// for in-flight handling
 	deliveryTS time.Time
 	clientID   int64
@@ -44,7 +45,10 @@ type Message struct {
 	deferred   time.Duration
 }
 
-func NewMessage(id MessageID, body []byte, routingKey string) *Message {
+func NewMessage(id MessageID, body []byte) *Message {
+	return NewMessageV2(id, body, "", 0)
+}
+func NewMessageV2(id MessageID, body []byte, routingKey string, srcClientID int64) *Message {
 	var hashCode uint32 = 0
 	if len(routingKey) == 0 {
 		hashCode = rand.Uint32()
@@ -52,12 +56,17 @@ func NewMessage(id MessageID, body []byte, routingKey string) *Message {
 		hashCode = HashString(routingKey)
 	}
 	////log.Printf("new msg id %v, routing key %v, hash %d\n", string(id[:]), routingKey, hashCode)
+	version := MSG_V2
+	if srcClientID > 0 {
+		version = version | MSG_RPC
+	}
 	return &Message{
 		ID:          id,
 		Body:        body,
 		Timestamp:   time.Now().UnixNano(),
-		Version:     MSG_V2,
+		Version:     version,
 		RoutingHash: hashCode,
+		srcClientID: srcClientID,
 	}
 }
 
@@ -113,7 +122,14 @@ func (m *Message) WriteTo(w io.Writer) (int64, error) {
 	if err != nil {
 		return total, err
 	}
-
+	if m.srcClientID > 0 && m.Version&MSG_RPC > 0 {
+		binary.BigEndian.PutUint64(buf[:8], uint64(m.srcClientID))
+		n, err = w.Write(buf[:8])
+		total += int64(n)
+		if err != nil {
+			return total, err
+		}
+	}
 	n, err = w.Write(m.Body)
 	total += int64(n)
 	if err != nil {
@@ -140,13 +156,18 @@ func decodeMessage(b []byte) (*Message, error) {
 		return nil, fmt.Errorf("invalid message buffer size (%d)", len(b))
 	}
 	ver := b[0]
-	if ver == MSG_V2 {
-		msg.Version = MSG_V2
+	if ver&MSG_V2 > 0 {
+		msg.Version = ver
 		msg.RoutingHash = uint32(binary.BigEndian.Uint32(b[1:5]))
 		msg.Timestamp = int64(binary.BigEndian.Uint64(b[5:13]))
 		msg.Attempts = binary.BigEndian.Uint16(b[13:15])
 		copy(msg.ID[:], b[15:15+MsgIDLength])
-		msg.Body = b[15+MsgIDLength:]
+		b = b[15+MsgIDLength:]
+		if ver&MSG_RPC > 0 {
+			msg.srcClientID = int64(binary.BigEndian.Uint64(b[:8]))
+			b = b[8:]
+		}
+		msg.Body = b[:]
 	} else {
 		msg.Version = MSG_V2
 		msg.RoutingHash = 0 //keep old msg in one process

@@ -42,6 +42,7 @@ type errStore struct {
 type Client interface {
 	Stats() ClientStats
 	IsProducer() bool
+	FinishMessage(id MessageID, result []byte) error
 }
 
 type NSQD struct {
@@ -244,6 +245,12 @@ func (n *NSQD) RemoveClient(clientID int64) {
 	}
 	delete(n.clients, clientID)
 	n.clientLock.Unlock()
+}
+func (n *NSQD) GetClient(clientID int64) Client {
+	n.clientLock.RLock()
+	c := n.clients[clientID]
+	n.clientLock.RUnlock()
+	return c
 }
 
 func (n *NSQD) Main() error {
