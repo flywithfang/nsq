@@ -403,9 +403,11 @@ func (c *Channel) FinishMessage(clientID int64, id MessageID, result []byte) err
 	}
 	c.removeFromInFlightPQ(msg)
 	if msg.srcClientID > 0 && result != nil {
-		c := c.ctx.nsqd.GetClient(msg.srcClientID)
-		if c != nil {
-			c.FinishMessage(id, result)
+		client := c.ctx.nsqd.GetClient(msg.srcClientID)
+		if client != nil {
+			client.FinishMessage(id, result)
+		} else {
+			c.ctx.nsqd.logf(LOG_ERROR, "rpc client not found msg_id=%v,client_id=%v", string(id[:]), msg.srcClientID)
 		}
 	}
 	if c.e2eProcessingLatencyStream != nil {

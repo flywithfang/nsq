@@ -111,8 +111,9 @@ type clientV2 struct {
 
 	wire *protocolV2
 }
-func newClientV2(id int64, conn net.Conn, ctx *context) *clientV2{
-	return newClientV2_2(id,conn,ctx,nil)
+
+func newClientV2(id int64, conn net.Conn, ctx *context) *clientV2 {
+	return newClientV2_2(id, conn, ctx, nil)
 }
 func newClientV2_2(id int64, conn net.Conn, ctx *context, wire *protocolV2) *clientV2 {
 	var identifier string

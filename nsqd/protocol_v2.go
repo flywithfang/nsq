@@ -76,6 +76,7 @@ func (p *protocolV2) IOLoop(conn net.Conn) error {
 		if len(line) > 0 && line[len(line)-1] == '\r' {
 			line = line[:len(line)-1]
 		}
+		fmt.Sprintf("line %v\n", line)
 		params := bytes.Split(line, separatorBytes)
 
 		p.ctx.nsqd.logf(LOG_DEBUG, "PROTOCOL(V2): [%s] %s", client, params)
@@ -703,6 +704,7 @@ func (p *protocolV2) FIN(client *clientV2, params [][]byte) ([]byte, error) {
 	if len(params) > 2 {
 		res = params[2]
 	}
+
 	var result []byte = nil
 	if res != nil && bytes.Equal(res, []byte("RES")) {
 		bodyLen, err := readLen(client.Reader, client.lenSlice)
@@ -726,7 +728,7 @@ func (p *protocolV2) FIN(client *clientV2, params [][]byte) ([]byte, error) {
 			return nil, protocol.NewFatalClientErr(err, "E_BAD_MESSAGE", "FIN failed to read message body")
 		}
 	}
-
+	p.ctx.nsqd.logf(LOG_DEBUG, fmt.Sprintf("res %v  %v %v", client.ID, *id, result))
 	err = client.Channel.FinishMessage(client.ID, *id, result)
 	if err != nil {
 		return nil, protocol.NewClientErr(err, "E_FIN_FAILED",
@@ -849,15 +851,16 @@ func (p *protocolV2) PUB(client *clientV2, params [][]byte) ([]byte, error) {
 	var srcClientID int64 = 0
 	if rpc {
 		srcClientID = client.ID
+
 	}
 	msg := NewMessageV2(ID, messageBody, routingKey, srcClientID)
 	err = topic.PutMessage(msg)
 	if err != nil {
 		return nil, protocol.NewFatalClientErr(err, "E_PUB_FAILED", "PUB failed "+err.Error())
 	}
-
+	p.ctx.nsqd.logf(LOG_DEBUG, fmt.Sprintf("rpc srcClientID %v,len %v,routingKey %v", msg.srcClientID, len(params), routingKey))
 	client.PublishedMessage(topicName, 1)
-	if rpc {
+	if !rpc {
 		return okBytes, nil
 	} else {
 		return ID[:], nil

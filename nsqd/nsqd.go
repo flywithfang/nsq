@@ -94,6 +94,7 @@ func New(opts *Options) (*NSQD, error) {
 	}
 
 	n := &NSQD{
+		clientIDSequence:     time.Now().Unix(),
 		startTime:            time.Now(),
 		topicMap:             make(map[string]*Topic),
 		clients:              make(map[int64]Client),
@@ -435,13 +436,15 @@ func (n *NSQD) PersistMetadata() error {
 }
 
 func (n *NSQD) Exit() {
+	n.logf(LOG_INFO, "NSQ: start exiting")
 	if n.tcpListener != nil {
 		n.tcpListener.Close()
 	}
+	n.logf(LOG_INFO, "NSQ: start exiting  tcpListener")
 	if n.tcpServer != nil {
 		n.tcpServer.CloseAll()
 	}
-
+	n.logf(LOG_INFO, "NSQ: start exiting  tcpServer")
 	if n.httpListener != nil {
 		n.httpListener.Close()
 	}
@@ -449,7 +452,7 @@ func (n *NSQD) Exit() {
 	if n.httpsListener != nil {
 		n.httpsListener.Close()
 	}
-
+	n.logf(LOG_INFO, "NSQ: start exiting  httpListener")
 	n.Lock()
 	err := n.PersistMetadata()
 	if err != nil {
