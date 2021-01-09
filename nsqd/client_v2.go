@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"compress/flate"
 	"crypto/tls"
-	"encoding/binary"
 	"fmt"
 	"net"
 	"sync"
@@ -325,7 +324,7 @@ func (c *clientV2) IsReadyForMessages() bool {
 	readyCount := atomic.LoadInt64(&c.ReadyCount)
 	inFlightCount := atomic.LoadInt64(&c.InFlightCount)
 
-	c.ctx.nsqd.logf(LOG_DEBUG, "[%s] state rdy: %4d inflt: %4d", c, readyCount, inFlightCount)
+	//c.ctx.nsqd.logf(LOG_DEBUG, "[%s] state rdy: %4d inflt: %4d", c, readyCount, inFlightCount)
 
 	if inFlightCount >= readyCount || readyCount <= 0 {
 		return false
@@ -619,9 +618,6 @@ func (c *clientV2) HasAuthorizations() bool {
 func (c *clientV2) FinishMessage(id MessageID, result []byte) error {
 	b := bytes.NewBuffer([]byte("RES "))
 	b.Write(id[:])
-	var buf [4]byte
-	len := len(result)
-	binary.BigEndian.PutUint32(buf[:], uint32(len))
 	b.Write(result)
 	c.wire.Send(c, frameTypeResponse, b.Bytes())
 	return nil

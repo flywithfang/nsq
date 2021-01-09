@@ -45,6 +45,10 @@ type Message struct {
 	deferred   time.Duration
 }
 
+func (m *Message) GetDesc() string {
+	s := fmt.Sprintf("v %d routing %d len %d attempts %d srcCientID %v", m.Version, m.RoutingHash, len(m.Body), m.Attempts, m.srcClientID)
+	return s
+}
 func NewMessage(id MessageID, body []byte) *Message {
 	return NewMessageV2(id, body, "", 0)
 }

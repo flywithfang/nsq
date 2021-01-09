@@ -159,6 +159,10 @@ func New(opts *Options) (*NSQD, error) {
 
 	n.logf(LOG_INFO, version.String("nsqd"))
 	n.logf(LOG_INFO, "ID: %d", opts.ID)
+	n.logf(LOG_INFO, "data-path %s", opts.DataPath)
+	n.logf(LOG_INFO, "mem-queue-size %d", opts.MemQueueSize)
+	n.logf(LOG_INFO, "client-time-out", opts.ClientTimeout)
+	n.logf(LOG_INFO, "max-bytes-per-file", opts.MaxBytesPerFile)
 
 	n.tcpServer = &tcpServer{}
 	n.tcpListener, err = net.Listen("tcp", opts.TCPAddress)

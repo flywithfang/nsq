@@ -98,6 +98,7 @@ func NewChannel(topicName string, channelName string, ctx *context,
 	if strings.HasSuffix(channelName, "#ephemeral") {
 		c.ephemeral = true
 		c.backend = newDummyBackendQueue()
+		c.ctx.nsqd.logf(LOG_INFO, "disk-queue ephemeral")
 	} else {
 		dqLogf := func(level diskqueue.LogLevel, f string, args ...interface{}) {
 			opts := ctx.nsqd.getOpts()
@@ -115,6 +116,7 @@ func NewChannel(topicName string, channelName string, ctx *context,
 			ctx.nsqd.getOpts().SyncTimeout,
 			dqLogf,
 		)
+		c.ctx.nsqd.logf(LOG_INFO, "disk-queue %v depth %v", backendName, c.backend.Depth())
 	}
 
 	c.ctx.nsqd.Notify(c)

@@ -7,6 +7,7 @@ require (
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/bmizerany/perks v0.0.0-20141205001514-d9a9656a3a4b
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/flywithfang/go-nsq v1.0.9 // indirect
 	github.com/golang/snappy v0.0.1
 	github.com/judwhite/go-svc v1.1.2
 	github.com/julienschmidt/httprouter v1.3.0
